@@ -1,7 +1,7 @@
 {
   "id": "sidebar-tab-colors",
   "title": "Sidebar Tab Colors",
-  "description": "Colorize the sidebar tab buttons, configurable per tab.",
+  "description": "Colorize the sidebar tab buttons and the scene control buttons, configurable per button.",
   "version": "1.0.0",
   "authors": [{ "name": "Tiziano" }],
   "compatibility": {

@@ -6,7 +6,7 @@
 
 ## Italiano
 
-Modulo per Foundry VTT che colora i pulsanti delle schede della barra laterale (Chat, Combattimenti, Scene, Attori, Oggetti, Diari, ecc.), con un colore diverso per ogni scheda. Funziona anche con le schede aggiunte da altri moduli (per esempio Dice So Nice o FA Nexus).
+Modulo per Foundry VTT che colora i pulsanti delle schede della barra laterale (Chat, Combattimenti, Scene, Attori, Oggetti, Diari, ecc.), con un colore diverso per ogni scheda. Colora anche i pulsanti dei controlli scena nella barra a sinistra (Token, Template, Tile, Disegni, Muri, Luci, Suoni, Regioni, Note). Funziona anche con le schede e i pulsanti aggiunti da altri moduli (per esempio Dice So Nice, FA Nexus o Art Browser).
 
 **Compatibilità:** Foundry VTT v13 e v14.
 
@@ -27,21 +27,23 @@ Si trovano in **Impostazioni di gioco → Configura impostazioni → Sidebar Tab
 | Opzione | Chi la vede | Vale per | Predefinito | Cosa fa |
 |---|---|---|---|---|
 | **Configure Colors** | Solo il GM | Tutti i giocatori del mondo | Palette "Default" | Apre la finestra per scegliere il colore di ogni scheda (vedi sotto). |
-| **Glow on active/hover tab** | Ogni giocatore | Solo chi la imposta | Attiva | Aggiunge un alone luminoso, del colore della scheda, alla scheda aperta e a quella sotto il mouse. |
+| **Glow on active/hover button** | Ogni giocatore | Solo chi la imposta | Attiva | Aggiunge un alone luminoso, del colore del pulsante, alla scheda o al controllo scena attivo e a quello sotto il mouse. |
 | **Start with sidebar collapsed** | Ogni giocatore | Solo chi la imposta | Disattiva | Quando il gioco si carica, la barra laterale parte chiusa (come se avessi premuto la freccia ▸). Si riapre normalmente con la freccia. |
 
 ### La finestra dei colori
 
-- **Elenco delle schede:** mostra tutte le schede presenti in quel momento nella barra laterale, comprese quelle aggiunte da altri moduli. Accanto a ogni scheda c'è la sua icona colorata come anteprima.
-- **Selettore colore:** scegli il colore con il quadratino colorato oppure scrivi il codice esadecimale (es. `#ff7043`). **Lascia il campo vuoto** per tenere l'aspetto normale di Foundry per quella scheda.
+- **Elenco delle schede:** è diviso in due sezioni, **Sidebar tabs** (le schede della barra laterale) e **Scene controls** (i pulsanti dei controlli scena a sinistra). Mostra tutto ciò che è presente in quel momento, compresi i pulsanti aggiunti da altri moduli. Accanto a ognuno c'è la sua icona colorata come anteprima.
+- **Controlli scena:** compaiono solo se c'è una scena aperta. Se la sezione dice di aprire una scena, aprila e riapri la finestra.
+- **Selettore colore:** scegli il colore con il quadratino colorato oppure scrivi il codice esadecimale (es. `#ff7043`). **Lascia il campo vuoto** per tenere l'aspetto normale di Foundry per quel pulsante.
+- **Controllo scena attivo:** Foundry gli mette uno sfondo evidenziato, quindi l'icona resta del colore normale e il colore scelto appare come bordo, così si legge bene anche con colori chiari.
 - **Salvataggio automatico:** ogni modifica si vede subito nella barra laterale e si salva da sola, anche se chiudi la finestra con la X. Il pulsante **Done** chiude soltanto la finestra.
-- **Preset + Apply:** scegli una palette dall'elenco e premi **Apply** per colorare tutte le schede in un colpo. Poi puoi ritoccare i singoli colori.
+- **Preset + Apply:** scegli una palette dall'elenco e premi **Apply** per colorare tutte le schede e tutti i controlli scena in un colpo. Poi puoi ritoccare i singoli colori.
 - **Reset defaults:** rimette la palette predefinita del modulo.
 - I colori delle schede di moduli disattivati vengono conservati: se riattivi il modulo, la sua scheda ritrova il colore.
 
 ### Preset disponibili
 
-I colori vengono assegnati alle schede nell'ordine in cui compaiono nella barra laterale. Se ci sono più schede che colori, la palette ricomincia dall'inizio.
+I colori vengono assegnati nell'ordine in cui compaiono i pulsanti, separatamente per le schede della barra laterale e per i controlli scena (ognuna delle due sezioni usa tutta la palette). Se ci sono più pulsanti che colori, la palette ricomincia dall'inizio.
 
 | Preset | Descrizione |
 |---|---|
@@ -96,7 +98,7 @@ git push origin v1.0.1
 
 ## English
 
-A Foundry VTT module that colors the sidebar tab buttons (Chat, Combat, Scenes, Actors, Items, Journal, etc.), with a different color per tab. It also works with tabs added by other modules (for example Dice So Nice or FA Nexus).
+A Foundry VTT module that colors the sidebar tab buttons (Chat, Combat, Scenes, Actors, Items, Journal, etc.), with a different color per tab. It also colors the scene control buttons in the left toolbar (Tokens, Templates, Tiles, Drawings, Walls, Lighting, Sounds, Regions, Notes). It works with tabs and buttons added by other modules too (for example Dice So Nice, FA Nexus or Art Browser).
 
 **Compatibility:** Foundry VTT v13 and v14.
 
@@ -116,22 +118,24 @@ Found under **Game Settings → Configure Settings → Sidebar Tab Colors**.
 
 | Option | Who sees it | Applies to | Default | What it does |
 |---|---|---|---|---|
-| **Configure Colors** | GM only | Every player in the world | "Default" palette | Opens the window to pick a color for each tab (see below). |
-| **Glow on active/hover tab** | Each player | Only that player | On | Adds a soft glow, in the tab's color, to the open tab and the one under the mouse. |
+| **Configure Colors** | GM only | Every player in the world | "Default" palette | Opens the window to pick a color for each tab and scene control (see below). |
+| **Glow on active/hover button** | Each player | Only that player | On | Adds a soft glow, in the button's color, to the active tab or scene control and the one under the mouse. |
 | **Start with sidebar collapsed** | Each player | Only that player | Off | The sidebar starts collapsed when the game loads (as if you clicked the ▸ arrow). Open it again with the arrow as usual. |
 
 ### The colors window
 
-- **Tab list:** shows every tab currently in the sidebar, including tabs added by other modules. Each one shows its icon in the chosen color as a preview.
-- **Color picker:** pick a color with the swatch or type a hex code (e.g. `#ff7043`). **Leave it empty** to keep Foundry's normal look for that tab.
+- **Button list:** split into two sections, **Sidebar tabs** and **Scene controls** (the left toolbar). It shows everything currently present, including buttons added by other modules. Each one shows its icon in the chosen color as a preview.
+- **Scene controls:** only appear while a scene is open. If the section asks you to open a scene, open one and reopen the window.
+- **Color picker:** pick a color with the swatch or type a hex code (e.g. `#ff7043`). **Leave it empty** to keep Foundry's normal look for that button.
+- **Active scene control:** Foundry gives it a highlighted background, so its icon keeps the normal color and the chosen color shows as a ring, staying readable even with light colors.
 - **Auto-save:** every change shows on the sidebar right away and saves itself, even if you close the window with the X. The **Done** button only closes the window.
-- **Preset + Apply:** choose a palette from the list and click **Apply** to color every tab at once. Then fine-tune single colors if you like.
+- **Preset + Apply:** choose a palette from the list and click **Apply** to color every tab and scene control at once. Then fine-tune single colors if you like.
 - **Reset defaults:** restores the module's default palette.
 - Colors of tabs from disabled modules are kept: re-enable the module and its tab gets its color back.
 
 ### Presets
 
-Colors are assigned to tabs in the order they appear in the sidebar. If there are more tabs than colors, the palette starts over.
+Colors are assigned in the order the buttons appear, separately for the sidebar tabs and the scene controls (each section uses the whole palette). If there are more buttons than colors, the palette starts over.
 
 | Preset | Description |
 |---|---|
