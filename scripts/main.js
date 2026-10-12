@@ -201,6 +201,15 @@ Hooks.once("init", () => {
     onChange: applyColors
   });
 
+  game.settings.register(MODULE_ID, "startCollapsed", {
+    name: "Start with sidebar collapsed",
+    hint: "Collapse the sidebar automatically when the game loads.",
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: false
+  });
+
   game.settings.registerMenu(MODULE_ID, "config", {
     name: "Sidebar Tab Colors",
     label: "Configure Colors",
@@ -211,6 +220,18 @@ Hooks.once("init", () => {
   });
 });
 
-Hooks.once("ready", applyColors);
+/** Collapse the sidebar, preferring the API and falling back to clicking the collapse button. */
+function collapseSidebar() {
+  const sidebar = ui.sidebar;
+  if (!sidebar || sidebar.expanded === false) return;
+  if (typeof sidebar.collapse === "function") sidebar.collapse();
+  else if (typeof sidebar.toggleExpanded === "function") sidebar.toggleExpanded(false);
+  else document.querySelector("#sidebar-tabs button.collapse[data-action='toggleState']")?.click();
+}
+
+Hooks.once("ready", () => {
+  applyColors();
+  if (game.settings.get(MODULE_ID, "startCollapsed")) collapseSidebar();
+});
 // Re-apply when the sidebar re-renders (tabs added by other modules, etc.)
 Hooks.on("renderSidebar", applyColors);
