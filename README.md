@@ -26,3 +26,5 @@ Push a version tag; the GitHub Action sets the version in `module.json`, builds 
 git tag v1.0.1
 git push origin v1.0.1
 ```
+
+Tags containing `-` (e.g. `v1.3.0-beta.1`) are published as pre-releases, which Foundry does not offer as updates. See the comments in [`.github/workflows/release.yml`](.github/workflows/release.yml) (English / Italiano) for every option.

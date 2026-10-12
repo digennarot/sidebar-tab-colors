@@ -1,24 +1,95 @@
+# =============================================================================
+# Release workflow / Workflow di rilascio
+# -----------------------------------------------------------------------------
+# EN: Publishes a new version of the module when you push a version tag.
+#     The tag is the single source of truth for the version number: you never
+#     need to edit "version" in module.json by hand.
+#
+# IT: Pubblica una nuova versione del modulo quando fai il push di un tag di
+#     versione. Il tag è l'unica fonte del numero di versione: non serve mai
+#     modificare a mano "version" in module.json.
+#
+# Usage / Uso:
+#     git tag v1.2.3
+#     git push origin v1.2.3
+#
+#     Pre-release (beta):  git tag v1.3.0-beta.1 && git push origin v1.3.0-beta.1
+#     EN: a tag containing "-" is published as a pre-release. Foundry's manifest
+#         URL (".../releases/latest/...") ignores pre-releases, so players are
+#         not offered betas as updates.
+#     IT: un tag che contiene "-" viene pubblicato come pre-release. L'URL del
+#         manifest di Foundry (".../releases/latest/...") ignora le pre-release,
+#         quindi ai giocatori non viene proposta la beta come aggiornamento.
+#
+# Result / Risultato:
+#     A GitHub release with two files / Una release GitHub con due file:
+#       - module.json  -> manifest read by Foundry / manifest letto da Foundry
+#       - module.zip   -> the module Foundry installs / il modulo che Foundry installa
+# =============================================================================
+
+# EN: Name shown in the repository's "Actions" tab.
+# IT: Nome mostrato nella scheda "Actions" del repository.
 name: Release
 
-# Push a tag like v1.2.3 to publish a release.
+# -----------------------------------------------------------------------------
+# on: when the workflow runs / quando parte il workflow
+# -----------------------------------------------------------------------------
 on:
   push:
+    # EN: Run only for tags starting with "v" (v1.0.0, v2.1.3-beta.1, ...).
+    #     Normal commits pushed to main do NOT create a release.
+    # IT: Parte solo per i tag che iniziano con "v" (v1.0.0, v2.1.3-beta.1, ...).
+    #     I normali commit su main NON creano una release.
     tags:
       - "v*"
 
+# -----------------------------------------------------------------------------
+# permissions: what the automatic GITHUB_TOKEN may do
+#              cosa può fare il GITHUB_TOKEN automatico
+# -----------------------------------------------------------------------------
 permissions:
+  # EN: "write" is required to create releases and upload files to them.
+  # IT: "write" serve per creare release e caricarvi i file.
   contents: write
 
 jobs:
   release:
+    # EN: Virtual machine the job runs on. ubuntu-latest already includes
+    #     jq, zip and the gh CLI used below.
+    # IT: Macchina virtuale su cui gira il job. ubuntu-latest include già
+    #     jq, zip e la CLI gh usati qui sotto.
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Set version and download URL from tag
+    steps:
+      # -----------------------------------------------------------------------
+      # 1. Checkout
+      # EN: Download the repository's files at the tagged commit.
+      # IT: Scarica i file del repository al commit del tag.
+      # -----------------------------------------------------------------------
+      - name: Checkout / Scarica il codice
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # 2. Update module.json / Aggiorna module.json
+      # EN: Writes the version and URLs into module.json, derived from the tag:
+      #       version  -> tag without the leading "v" (v1.2.3 -> 1.2.3)
+      #       url      -> repository page
+      #       manifest -> always the LATEST release's module.json, so Foundry
+      #                   can check for updates
+      #       download -> the zip of THIS specific release
+      #     The change is made only inside the build, it is not committed.
+      # IT: Scrive in module.json versione e URL ricavati dal tag:
+      #       version  -> tag senza la "v" iniziale (v1.2.3 -> 1.2.3)
+      #       url      -> pagina del repository
+      #       manifest -> sempre il module.json dell'ULTIMA release, così
+      #                   Foundry può controllare gli aggiornamenti
+      #       download -> lo zip di QUESTA release
+      #     La modifica avviene solo nella build, non viene committata.
+      # -----------------------------------------------------------------------
+      - name: Set version and URLs from tag / Imposta versione e URL dal tag
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          VERSION="${TAG#v}"
+          TAG="${GITHUB_REF_NAME}"          # e.g. / es. v1.2.3
+          VERSION="${TAG#v}"                # e.g. / es. 1.2.3
           REPO_URL="https://github.com/${GITHUB_REPOSITORY}"
           jq --arg v "$VERSION" \
              --arg url "$REPO_URL" \
@@ -27,15 +98,56 @@ jobs:
              '.version = $v | .url = $url | .manifest = $manifest | .download = $download' \
              module.json > module.tmp.json
           mv module.tmp.json module.json
+          # EN: Print the result in the job log, useful for debugging.
+          # IT: Stampa il risultato nel log del job, utile per il debug.
           cat module.json
 
-      - name: Build module.zip
+      # -----------------------------------------------------------------------
+      # 3. Build the zip / Crea lo zip
+      # EN: Files and folders that go into the module. If you add new folders
+      #     (e.g. "lang", "templates", "assets"), add them to this list.
+      # IT: File e cartelle che finiscono nel modulo. Se aggiungi nuove
+      #     cartelle (es. "lang", "templates", "assets"), aggiungile qui.
+      # -----------------------------------------------------------------------
+      - name: Build module.zip / Crea module.zip
         run: zip -r module.zip module.json scripts styles README.md
 
-      - name: Create GitHub release
+      # -----------------------------------------------------------------------
+      # 4. Publish the release / Pubblica la release
+      # EN: Options of "gh release create":
+      #       "$GITHUB_REF_NAME"   tag the release is attached to
+      #       module.json/.zip     files uploaded to the release
+      #       --title              release title (here: the tag, e.g. v1.2.3)
+      #       --generate-notes     notes built automatically from the commits
+      #                            since the previous release
+      #       --prerelease         added automatically for tags containing "-"
+      #     Other options you can add:
+      #       --draft              create it as a draft, publish manually later
+      #       --notes-file X.md    use your own notes instead of --generate-notes
+      #       --latest=false       do not mark it as the latest release
+      # IT: Opzioni di "gh release create":
+      #       "$GITHUB_REF_NAME"   tag a cui è legata la release
+      #       module.json/.zip     file caricati nella release
+      #       --title              titolo della release (qui: il tag, es. v1.2.3)
+      #       --generate-notes     note generate automaticamente dai commit
+      #                            dalla release precedente
+      #       --prerelease         aggiunta in automatico per i tag con "-"
+      #     Altre opzioni che puoi aggiungere:
+      #       --draft              crea una bozza, da pubblicare a mano dopo
+      #       --notes-file X.md    usa note tue invece di --generate-notes
+      #       --latest=false       non segnarla come ultima release
+      # -----------------------------------------------------------------------
+      - name: Create GitHub release / Crea la release GitHub
         env:
+          # EN: Token GitHub creates automatically for each run; gh uses it to log in.
+          # IT: Token creato automaticamente da GitHub per ogni esecuzione; gh lo usa per accedere.
           GH_TOKEN: ${{ github.token }}
         run: |
+          EXTRA=""
+          case "$GITHUB_REF_NAME" in
+            *-*) EXTRA="--prerelease" ;;   # v1.3.0-beta.1 -> pre-release
+          esac
           gh release create "$GITHUB_REF_NAME" module.json module.zip \
             --title "$GITHUB_REF_NAME" \
-            --generate-notes
+            --generate-notes \
+            $EXTRA
