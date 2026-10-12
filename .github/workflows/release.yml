@@ -1,153 +1,207 @@
 # =============================================================================
 # Release workflow / Workflow di rilascio
-# -----------------------------------------------------------------------------
-# EN: Publishes a new version of the module when you push a version tag.
-#     The tag is the single source of truth for the version number: you never
-#     need to edit "version" in module.json by hand.
+# =============================================================================
+# EN  Publishes the module when you push a version tag. The tag is the only
+#     place the version lives: never edit "version" in module.json by hand.
+# IT  Pubblica il modulo quando fai il push di un tag di versione. La versione
+#     sta solo nel tag: non modificare mai a mano "version" in module.json.
 #
-# IT: Pubblica una nuova versione del modulo quando fai il push di un tag di
-#     versione. Il tag è l'unica fonte del numero di versione: non serve mai
-#     modificare a mano "version" in module.json.
+#   Stable / Stabile:     git tag v1.2.3        && git push origin v1.2.3
+#   Beta / Pre-release:   git tag v1.3.0-beta.1 && git push origin v1.3.0-beta.1
 #
-# Usage / Uso:
-#     git tag v1.2.3
-#     git push origin v1.2.3
+# Tag rules / Regole dei tag (semver, checked / controllato):
+#   vMAJOR.MINOR.PATCH           -> stable release / release stabile
+#   vMAJOR.MINOR.PATCH-SUFFIX    -> pre-release (beta, rc...)
+#   EN  Anything else (vtest, v1.2, v-1.2.3) makes the workflow fail.
+#       A fix for a stable version is a new PATCH (v1.2.4), not "v1.2.3-hotfix":
+#       a dash always means pre-release.
+#   IT  Qualsiasi altro formato (vtest, v1.2, v-1.2.3) fa fallire il workflow.
+#       Una correzione di una stabile è una nuova PATCH (v1.2.4), non
+#       "v1.2.3-hotfix": il trattino significa sempre pre-release.
 #
-#     Pre-release (beta):  git tag v1.3.0-beta.1 && git push origin v1.3.0-beta.1
-#     EN: a tag containing "-" is published as a pre-release. Foundry's manifest
-#         URL (".../releases/latest/...") ignores pre-releases, so players are
-#         not offered betas as updates.
-#     IT: un tag che contiene "-" viene pubblicato come pre-release. L'URL del
-#         manifest di Foundry (".../releases/latest/...") ignora le pre-release,
-#         quindi ai giocatori non viene proposta la beta come aggiornamento.
+# Update channels / Canali di aggiornamento (manifest URL for Foundry):
+#   Stable / Stabile   .../releases/latest/download/module.json
+#       EN  Only the highest stable version. Betas are never offered.
+#       IT  Solo la versione stabile più alta. Le beta non vengono mai proposte.
+#   Beta               .../releases/download/beta/module.json
+#       EN  The newest version, beta or stable. A rolling "beta" release
+#           (created automatically) holds its module.json. When a tester
+#           updates to a stable version they move back to the stable channel.
+#       IT  La versione più nuova, beta o stabile. Una release "beta" fissa
+#           (creata in automatico) contiene il suo module.json. Quando un
+#           tester aggiorna a una stabile torna sul canale stabile.
 #
-# Result / Risultato:
-#     A GitHub release with two files / Una release GitHub con due file:
-#       - module.json  -> manifest read by Foundry / manifest letto da Foundry
-#       - module.zip   -> the module Foundry installs / il modulo che Foundry installa
+# Re-running / Rilanciare:
+#   EN  Re-running the workflow (or re-pushing a deleted tag) replaces the
+#       files of the existing release instead of failing.
+#   IT  Rilanciare il workflow (o rifare il push di un tag cancellato)
+#       sostituisce i file della release esistente invece di fallire.
 # =============================================================================
 
-# EN: Name shown in the repository's "Actions" tab.
-# IT: Nome mostrato nella scheda "Actions" del repository.
 name: Release
 
-# -----------------------------------------------------------------------------
-# on: when the workflow runs / quando parte il workflow
-# -----------------------------------------------------------------------------
 on:
   push:
-    # EN: Run only for tags starting with "v" (v1.0.0, v2.1.3-beta.1, ...).
-    #     Normal commits pushed to main do NOT create a release.
-    # IT: Parte solo per i tag che iniziano con "v" (v1.0.0, v2.1.3-beta.1, ...).
-    #     I normali commit su main NON creano una release.
+    # EN  Only tags starting with "v". Normal commits never create a release.
+    # IT  Solo i tag che iniziano con "v". I normali commit non creano release.
     tags:
       - "v*"
 
-# -----------------------------------------------------------------------------
-# permissions: what the automatic GITHUB_TOKEN may do
-#              cosa può fare il GITHUB_TOKEN automatico
-# -----------------------------------------------------------------------------
 permissions:
-  # EN: "write" is required to create releases and upload files to them.
-  # IT: "write" serve per creare release e caricarvi i file.
+  # EN  Needed to create releases and upload files.
+  # IT  Serve per creare release e caricare file.
   contents: write
 
 jobs:
   release:
-    # EN: Virtual machine the job runs on. ubuntu-latest already includes
-    #     jq, zip and the gh CLI used below.
-    # IT: Macchina virtuale su cui gira il job. ubuntu-latest include già
-    #     jq, zip e la CLI gh usati qui sotto.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest   # EN includes jq, zip, gh / IT include jq, zip, gh
+    env:
+      TAG: ${{ github.ref_name }}
+      REPO_URL: https://github.com/${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}   # EN login for gh / IT accesso per gh
 
     steps:
-      # -----------------------------------------------------------------------
-      # 1. Checkout
-      # EN: Download the repository's files at the tagged commit.
-      # IT: Scarica i file del repository al commit del tag.
-      # -----------------------------------------------------------------------
       - name: Checkout / Scarica il codice
         uses: actions/checkout@v4
+        with:
+          # EN  Full history and all tags, needed to find the previous/highest
+          #     stable version.
+          # IT  Storia completa e tutti i tag, servono per trovare la versione
+          #     stabile precedente/più alta.
+          fetch-depth: 0
 
       # -----------------------------------------------------------------------
-      # 2. Update module.json / Aggiorna module.json
-      # EN: Writes the version and URLs into module.json, derived from the tag:
-      #       version  -> tag without the leading "v" (v1.2.3 -> 1.2.3)
-      #       url      -> repository page
-      #       manifest -> always the LATEST release's module.json, so Foundry
-      #                   can check for updates
-      #       download -> the zip of THIS specific release
-      #     The change is made only inside the build, it is not committed.
-      # IT: Scrive in module.json versione e URL ricavati dal tag:
-      #       version  -> tag senza la "v" iniziale (v1.2.3 -> 1.2.3)
-      #       url      -> pagina del repository
-      #       manifest -> sempre il module.json dell'ULTIMA release, così
-      #                   Foundry può controllare gli aggiornamenti
-      #       download -> lo zip di QUESTA release
-      #     La modifica avviene solo nella build, non viene committata.
+      # EN  Validates the tag and decides, writing them to $GITHUB_ENV:
+      #       VERSION      tag without "v"
+      #       PRERELEASE   true if the tag has a "-SUFFIX"
+      #       NOTES_FROM   previous stable tag: a stable release's notes list
+      #                    everything since the last STABLE (betas included)
+      #       IS_LATEST    true if this is the highest stable version, so a
+      #                    late hotfix of an old line never becomes "latest"
+      # IT  Controlla il tag e decide, scrivendoli in $GITHUB_ENV:
+      #       VERSION      tag senza "v"
+      #       PRERELEASE   true se il tag ha un "-SUFFISSO"
+      #       NOTES_FROM   tag stabile precedente: le note di una stabile
+      #                    elencano tutto dall'ultima STABILE (beta incluse)
+      #       IS_LATEST    true se è la versione stabile più alta, così una
+      #                    correzione tardiva di una versione vecchia non
+      #                    diventa mai "latest"
       # -----------------------------------------------------------------------
-      - name: Set version and URLs from tag / Imposta versione e URL dal tag
+      - name: Check tag / Controlla il tag
+        id: tag
         run: |
-          TAG="${GITHUB_REF_NAME}"          # e.g. / es. v1.2.3
-          VERSION="${TAG#v}"                # e.g. / es. 1.2.3
-          REPO_URL="https://github.com/${GITHUB_REPOSITORY}"
-          jq --arg v "$VERSION" \
-             --arg url "$REPO_URL" \
-             --arg manifest "$REPO_URL/releases/latest/download/module.json" \
+          SEMVER='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+          STABLE_RE='^v[0-9]+\.[0-9]+\.[0-9]+$'
+          if ! [[ "$TAG" =~ $SEMVER ]]; then
+            echo "::error::Invalid tag '$TAG'. Use vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-suffix (e.g. v1.2.3, v1.3.0-beta.1)."
+            exit 1
+          fi
+          STABLE_TAGS=$(git tag -l 'v*' | grep -E "$STABLE_RE" | sort -V || true)
+          if [[ "$TAG" =~ $STABLE_RE ]]; then
+            PRERELEASE=false
+            NOTES_FROM=$(printf '%s\n' $STABLE_TAGS | awk -v t="$TAG" '$0==t {print p; exit} {p=$0}')
+            [[ "$(printf '%s\n' $STABLE_TAGS | tail -n1)" == "$TAG" ]] && IS_LATEST=true || IS_LATEST=false
+          else
+            PRERELEASE=true
+            NOTES_FROM=""
+            IS_LATEST=false
+          fi
+          {
+            echo "VERSION=${TAG#v}"
+            echo "PRERELEASE=$PRERELEASE"
+            echo "NOTES_FROM=$NOTES_FROM"
+            echo "IS_LATEST=$IS_LATEST"
+          } | tee -a "$GITHUB_ENV" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v} prerelease=$PRERELEASE notes-from=${NOTES_FROM:-auto} latest=$IS_LATEST"
+
+      # -----------------------------------------------------------------------
+      # EN  Writes into module.json (in the build only, not committed):
+      #       version   from the tag
+      #       url       repository page
+      #       manifest  update channel: stable, or beta for pre-releases
+      #       download  zip of THIS release
+      # IT  Scrive in module.json (solo nella build, non committato):
+      #       version   dal tag
+      #       url       pagina del repository
+      #       manifest  canale di aggiornamento: stabile, o beta per le pre-release
+      #       download  zip di QUESTA release
+      # -----------------------------------------------------------------------
+      - name: Update module.json / Aggiorna module.json
+        run: |
+          if [[ "$PRERELEASE" == true ]]; then
+            MANIFEST="$REPO_URL/releases/download/beta/module.json"
+          else
+            MANIFEST="$REPO_URL/releases/latest/download/module.json"
+          fi
+          jq --arg v "$VERSION" --arg url "$REPO_URL" --arg manifest "$MANIFEST" \
              --arg download "$REPO_URL/releases/download/$TAG/module.zip" \
              '.version = $v | .url = $url | .manifest = $manifest | .download = $download' \
              module.json > module.tmp.json
           mv module.tmp.json module.json
-          # EN: Print the result in the job log, useful for debugging.
-          # IT: Stampa il risultato nel log del job, utile per il debug.
           cat module.json
 
       # -----------------------------------------------------------------------
-      # 3. Build the zip / Crea lo zip
-      # EN: Files and folders that go into the module. If you add new folders
-      #     (e.g. "lang", "templates", "assets"), add them to this list.
-      # IT: File e cartelle che finiscono nel modulo. Se aggiungi nuove
-      #     cartelle (es. "lang", "templates", "assets"), aggiungile qui.
+      # EN  Module contents. Add new folders here (e.g. lang, templates, assets).
+      # IT  Contenuto del modulo. Aggiungi qui le nuove cartelle (es. lang,
+      #     templates, assets).
       # -----------------------------------------------------------------------
       - name: Build module.zip / Crea module.zip
         run: zip -r module.zip module.json scripts styles README.md
 
       # -----------------------------------------------------------------------
-      # 4. Publish the release / Pubblica la release
-      # EN: Options of "gh release create":
-      #       "$GITHUB_REF_NAME"   tag the release is attached to
-      #       module.json/.zip     files uploaded to the release
-      #       --title              release title (here: the tag, e.g. v1.2.3)
-      #       --generate-notes     notes built automatically from the commits
-      #                            since the previous release
-      #       --prerelease         added automatically for tags containing "-"
-      #     Other options you can add:
-      #       --draft              create it as a draft, publish manually later
-      #       --notes-file X.md    use your own notes instead of --generate-notes
-      #       --latest=false       do not mark it as the latest release
-      # IT: Opzioni di "gh release create":
-      #       "$GITHUB_REF_NAME"   tag a cui è legata la release
-      #       module.json/.zip     file caricati nella release
-      #       --title              titolo della release (qui: il tag, es. v1.2.3)
-      #       --generate-notes     note generate automaticamente dai commit
-      #                            dalla release precedente
-      #       --prerelease         aggiunta in automatico per i tag con "-"
-      #     Altre opzioni che puoi aggiungere:
-      #       --draft              crea una bozza, da pubblicare a mano dopo
-      #       --notes-file X.md    usa note tue invece di --generate-notes
-      #       --latest=false       non segnarla come ultima release
+      # EN  gh release create options:
+      #       --title             release title (the tag)
+      #       --generate-notes    notes built from the commits
+      #       --notes-start-tag   where the notes start (NOTES_FROM above)
+      #       --prerelease        for tags with "-SUFFIX"
+      #       --latest[=false]    explicitly mark (or not) as latest
+      #     Other options you can add: --draft (publish by hand later),
+      #     --notes-file X.md (your own notes instead of --generate-notes).
+      #     If the release already exists (re-run), its files are replaced
+      #     with "gh release upload --clobber".
+      # IT  Opzioni di gh release create:
+      #       --title             titolo della release (il tag)
+      #       --generate-notes    note generate dai commit
+      #       --notes-start-tag   da dove partono le note (NOTES_FROM sopra)
+      #       --prerelease        per i tag con "-SUFFISSO"
+      #       --latest[=false]    segna (o no) esplicitamente come latest
+      #     Altre opzioni che puoi aggiungere: --draft (pubblichi a mano dopo),
+      #     --notes-file X.md (note tue invece di --generate-notes).
+      #     Se la release esiste già (rilancio), i file vengono sostituiti
+      #     con "gh release upload --clobber".
       # -----------------------------------------------------------------------
-      - name: Create GitHub release / Crea la release GitHub
-        env:
-          # EN: Token GitHub creates automatically for each run; gh uses it to log in.
-          # IT: Token creato automaticamente da GitHub per ogni esecuzione; gh lo usa per accedere.
-          GH_TOKEN: ${{ github.token }}
+      - name: Publish release / Pubblica la release
         run: |
-          EXTRA=""
-          case "$GITHUB_REF_NAME" in
-            *-*) EXTRA="--prerelease" ;;   # v1.3.0-beta.1 -> pre-release
-          esac
-          gh release create "$GITHUB_REF_NAME" module.json module.zip \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes \
-            $EXTRA
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists, replacing files / La release esiste, sostituisco i file"
+            gh release upload "$TAG" module.json module.zip --clobber
+            exit 0
+          fi
+          ARGS=(--title "$TAG" --generate-notes)
+          [[ -n "$NOTES_FROM" ]] && ARGS+=(--notes-start-tag "$NOTES_FROM")
+          if [[ "$PRERELEASE" == true ]]; then
+            ARGS+=(--prerelease --latest=false)
+          elif [[ "$IS_LATEST" == true ]]; then
+            ARGS+=(--latest)
+          else
+            ARGS+=(--latest=false)
+          fi
+          gh release create "$TAG" module.json module.zip "${ARGS[@]}"
+
+      # -----------------------------------------------------------------------
+      # EN  Beta channel: copies module.json into the rolling "beta" release
+      #     for every pre-release and for the highest stable version, so the
+      #     beta channel always offers the newest version.
+      # IT  Canale beta: copia module.json nella release fissa "beta" per ogni
+      #     pre-release e per la versione stabile più alta, così il canale
+      #     beta propone sempre la versione più nuova.
+      # -----------------------------------------------------------------------
+      - name: Update beta channel / Aggiorna il canale beta
+        if: steps.tag.outputs.PRERELEASE == 'true' || steps.tag.outputs.IS_LATEST == 'true'
+        run: |
+          if ! gh release view beta >/dev/null 2>&1; then
+            gh release create beta --prerelease --latest=false --target "$GITHUB_SHA" \
+              --title "Beta channel / Canale beta" \
+              --notes "Manifest URL for testers / URL manifest per i tester: $REPO_URL/releases/download/beta/module.json"
+          fi
+          gh release upload beta module.json --clobber
