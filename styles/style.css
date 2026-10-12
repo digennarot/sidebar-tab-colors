@@ -28,3 +28,15 @@ body.stc-glow #sidebar-tabs button[data-tab].stc-colored:hover {
 #sidebar-tab-colors-config .stc-row > label {
   flex: 1;
 }
+#sidebar-tab-colors-config .stc-preset {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+#sidebar-tab-colors-config .stc-preset > select {
+  flex: 1;
+}
+#sidebar-tab-colors-config .stc-preset > button {
+  flex: 0 0 auto;
+  width: auto;
+}

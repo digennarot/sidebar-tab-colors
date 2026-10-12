@@ -20,6 +20,45 @@ const DEFAULT_COLORS = {
   settings: "#bdbdbd"
 };
 
+/** Convert HSL (h in degrees, s/l in 0-1) to a #rrggbb string. */
+function hslToHex(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  const f = (n) => {
+    const k = (n + h / 30) % 12;
+    const c = l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return Math.round(c * 255).toString(16).padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+/** Spread a palette over the tabs, cycling when there are more tabs than colors. */
+const cycle = (palette) => (tabs) => Object.fromEntries(tabs.map((tab, i) => [tab, palette[i % palette.length]]));
+
+/** Spread a hue range evenly over the tabs. */
+const gradient = (from, to, s, l) => (tabs) => Object.fromEntries(tabs.map((tab, i) =>
+  [tab, hslToHex(from + ((to - from) * i) / Math.max(tabs.length - 1, 1), s, l)]));
+
+/** Each preset maps the ordered list of tab ids to a { tab: color } object. */
+const PRESETS = {
+  default: { label: "Default", colors: (tabs) => Object.fromEntries(tabs.map((tab, i) =>
+    [tab, DEFAULT_COLORS[tab] ?? hslToHex((i * 137.5) % 360, 0.6, 0.6)])) },
+  rainbow: { label: "Rainbow", colors: gradient(0, 300, 0.85, 0.6) },
+  solarized: { label: "Solarized", colors: cycle(["#b58900", "#cb4b16", "#dc322f", "#d33682", "#6c71c4", "#268bd2", "#2aa198", "#859900"]) },
+  nord: { label: "Nord", colors: cycle(["#bf616a", "#d08770", "#ebcb8b", "#a3be8c", "#b48ead", "#88c0d0", "#81a1c1", "#5e81ac", "#8fbcbb"]) },
+  dracula: { label: "Dracula", colors: cycle(["#ff5555", "#ffb86c", "#f1fa8c", "#50fa7b", "#8be9fd", "#bd93f9", "#ff79c6"]) },
+  gruvbox: { label: "Gruvbox", colors: cycle(["#fb4934", "#fe8019", "#fabd2f", "#b8bb26", "#8ec07c", "#83a598", "#d3869b"]) },
+  monokai: { label: "Monokai", colors: cycle(["#f92672", "#fd971f", "#e6db74", "#a6e22e", "#66d9ef", "#ae81ff"]) },
+  catppuccin: { label: "Catppuccin Mocha", colors: cycle(["#f38ba8", "#fab387", "#f9e2af", "#a6e3a1", "#94e2d5", "#89b4fa", "#cba6f7", "#f5c2e7", "#74c7ec", "#b4befe"]) },
+  tokyonight: { label: "Tokyo Night", colors: cycle(["#f7768e", "#ff9e64", "#e0af68", "#9ece6a", "#73daca", "#7dcfff", "#7aa2f7", "#bb9af7"]) },
+  pastel: { label: "Pastel", colors: cycle(["#ffadad", "#ffd6a5", "#fdffb6", "#caffbf", "#9bf6ff", "#a0c4ff", "#bdb2ff", "#ffc6ff"]) },
+  neon: { label: "Neon", colors: cycle(["#ff00ff", "#00ffff", "#39ff14", "#ffff00", "#ff073a", "#bc13fe", "#ff6ec7"]) },
+  ocean: { label: "Ocean", colors: gradient(170, 240, 0.7, 0.6) },
+  sunset: { label: "Sunset", colors: gradient(-20, 50, 0.9, 0.62) },
+  forest: { label: "Forest", colors: gradient(60, 160, 0.5, 0.5) },
+  gold: { label: "Monochrome Gold", colors: cycle(["#d4a017"]) },
+  silver: { label: "Monochrome Silver", colors: cycle(["#c0c0c0"]) }
+};
+
 /** Read the tabs currently present in the sidebar (core + module-added). */
 function getSidebarTabs() {
   const buttons = document.querySelectorAll("#sidebar-tabs button[data-action='tab'][data-tab]");
@@ -66,7 +105,8 @@ class TabColorConfig extends foundry.applications.api.ApplicationV2 {
       closeOnSubmit: true
     },
     actions: {
-      reset: TabColorConfig.#onReset
+      reset: TabColorConfig.#onReset,
+      applyPreset: TabColorConfig.#onApplyPreset
     }
   };
 
@@ -80,10 +120,19 @@ class TabColorConfig extends foundry.applications.api.ApplicationV2 {
         <color-picker name="${esc(id)}" value="${esc(colors[id] ?? "")}"></color-picker>
       </div>`).join("");
 
+    const presetOptions = Object.entries(PRESETS)
+      .map(([key, { label }]) => `<option value="${key}">${esc(label)}</option>`).join("");
+
     const html = document.createElement("div");
     html.innerHTML = `
       <section class="standard-form">
-        <p class="hint">Leave a color empty to keep the default look for that tab.</p>
+        <div class="form-group stc-preset">
+          <label>Preset</label>
+          <select class="stc-preset-select">${presetOptions}</select>
+          <button type="button" data-action="applyPreset"><i class="fa-solid fa-wand-magic-sparkles"></i> Apply</button>
+        </div>
+        <p class="hint">A preset fills in the colors below; click Save to keep them. Leave a color empty to keep the default look for that tab.</p>
+        <hr>
         ${rows}
       </section>
       <footer class="form-footer">
@@ -95,6 +144,26 @@ class TabColorConfig extends foundry.applications.api.ApplicationV2 {
 
   _replaceHTML(result, content) {
     content.replaceChildren(...result.children);
+  }
+
+  _onRender(context, options) {
+    super._onRender(context, options);
+    if (!options.isFirstRender) return;
+    // Live-preview each icon in its picked color
+    this.element.addEventListener("change", (event) => {
+      const picker = event.target.closest("color-picker");
+      if (picker) picker.closest(".stc-row").querySelector("i").style.color = picker.value ?? "";
+    });
+  }
+
+  static #onApplyPreset() {
+    const key = this.element.querySelector(".stc-preset-select").value;
+    const pickers = Array.from(this.element.querySelectorAll(".stc-row color-picker"));
+    const colors = PRESETS[key].colors(pickers.map((p) => p.name));
+    for (const picker of pickers) {
+      picker.value = colors[picker.name];
+      picker.closest(".stc-row").querySelector("i").style.color = colors[picker.name];
+    }
   }
 
   static async #onSubmit(event, form, formData) {
