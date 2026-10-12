@@ -13,7 +13,7 @@ https://github.com/digennarot/sidebar-tab-colors/releases/latest/download/module
 ## Usage
 
 - **Game Settings → Configure Settings → Sidebar Tab Colors → Configure Colors** (GM only). Lists every tab currently in the sidebar, including tabs added by other modules.
-- Pick a **preset** (Rainbow, Solarized, Nord, Dracula, Gruvbox, Monokai, Catppuccin, Tokyo Night, Pastel, Neon, Ocean, Sunset, Forest, Monochrome Gold/Silver) and click **Apply** to fill in all colors, then tweak and **Save**.
+- Pick a **preset** (Rainbow, Solarized, Nord, Dracula, Gruvbox, Monokai, Catppuccin, Tokyo Night, Pastel, Neon, Ocean, Sunset, Forest, Monochrome Gold/Silver) and click **Apply** to fill in all colors. Changes show on the sidebar and save immediately.
 - Leave a color empty to keep the default look for that tab. **Reset defaults** restores the built-in palette.
 - **Glow on active/hover tab** is a per-player setting.
 - **Start with sidebar collapsed** (per-player) collapses the sidebar when the game loads.
