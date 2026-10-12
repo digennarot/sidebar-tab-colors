@@ -1,0 +1,26 @@
+# Sidebar Tab Colors
+
+A Foundry VTT (v13) module that colorizes the sidebar tab buttons, with a color per tab.
+
+## Install
+
+In Foundry's **Install Module** dialog, paste this manifest URL:
+
+```
+https://github.com/digennarot/sidebar-tab-colors/releases/latest/download/module.json
+```
+
+## Usage
+
+- **Game Settings → Configure Settings → Sidebar Tab Colors → Configure Colors** (GM only). Lists every tab currently in the sidebar, including tabs added by other modules.
+- Leave a color empty to keep the default look for that tab. **Reset defaults** restores the built-in palette.
+- **Glow on active/hover tab** is a per-player setting.
+
+## Releasing
+
+Push a version tag; the GitHub Action sets the version in `module.json`, builds `module.zip` and publishes the release:
+
+```
+git tag v1.0.1
+git push origin v1.0.1
+```
