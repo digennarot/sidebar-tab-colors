@@ -69,9 +69,15 @@ function getSidebarTabs() {
   }));
 }
 
-/** Write one CSS rule per colored tab into a <style> element in <head>. */
-function applyColors() {
-  const colors = game.settings.get(MODULE_ID, "colors") ?? {};
+/**
+ * Write the tab colors as CSS rules into a <style> element in <head>.
+ * The rules target the buttons by data-tab, so they survive the sidebar
+ * (or another UI module) re-rendering the buttons.
+ * @param {object} [colors]  Colors to show; defaults to the saved setting (used for live preview).
+ */
+function applyColors(colors) {
+  colors ??= game.settings.get(MODULE_ID, "colors") ?? {};
+  const glow = game.settings.get(MODULE_ID, "glow");
   let style = document.getElementById(STYLE_ID);
   if (!style) {
     style = document.createElement("style");
@@ -79,15 +85,17 @@ function applyColors() {
     document.head.append(style);
   }
   style.textContent = Object.entries(colors)
-    .filter(([, color]) => color)
-    .map(([tab, color]) => `#sidebar-tabs button[data-tab="${CSS.escape(tab)}"] { --stc-color: ${color}; }`)
+    .filter(([, color]) => /^#[0-9a-f]{3,8}$/i.test(color ?? ""))
+    .map(([tab, color]) => {
+      const sel = `#sidebar-tabs [data-tab="${CSS.escape(tab)}"]`;
+      const on = `${sel}:hover, ${sel}.active, ${sel}[aria-pressed="true"]`;
+      return [
+        `${sel} { color: ${color} !important; opacity: 0.75; transition: opacity 0.15s, text-shadow 0.15s; }`,
+        `${on} { opacity: 1; }`,
+        glow ? `${on} { text-shadow: 0 0 8px ${color}; }` : ""
+      ].join("\n");
+    })
     .join("\n");
-
-  // Mark colored buttons so the base stylesheet only affects them
-  for (const btn of document.querySelectorAll("#sidebar-tabs button[data-tab]")) {
-    btn.classList.toggle("stc-colored", !!colors[btn.dataset.tab]);
-  }
-  document.body.classList.toggle("stc-glow", game.settings.get(MODULE_ID, "glow"));
 }
 
 class TabColorConfig extends foundry.applications.api.ApplicationV2 {
@@ -102,13 +110,20 @@ class TabColorConfig extends foundry.applications.api.ApplicationV2 {
     position: { width: 420 },
     form: {
       handler: TabColorConfig.#onSubmit,
-      closeOnSubmit: true
+      closeOnSubmit: false
     },
     actions: {
       reset: TabColorConfig.#onReset,
-      applyPreset: TabColorConfig.#onApplyPreset
+      applyPreset: TabColorConfig.#onApplyPreset,
+      done: TabColorConfig.#onDone
     }
   };
+
+  /** True while there are changes not yet written to the setting. */
+  #dirty = false;
+
+  /** Save shortly after the last change, so applying a preset saves once. */
+  #saveSoon = foundry.utils.debounce(() => { if (this.#dirty && this.rendered) this.submit(); }, 300);
 
   async _renderHTML() {
     const colors = game.settings.get(MODULE_ID, "colors") ?? {};
@@ -131,13 +146,13 @@ class TabColorConfig extends foundry.applications.api.ApplicationV2 {
           <select class="stc-preset-select">${presetOptions}</select>
           <button type="button" data-action="applyPreset"><i class="fa-solid fa-wand-magic-sparkles"></i> Apply</button>
         </div>
-        <p class="hint">A preset fills in the colors below; click Save to keep them. Leave a color empty to keep the default look for that tab.</p>
+        <p class="hint">Changes apply and save immediately. Leave a color empty to keep the default look for that tab.</p>
         <hr>
         ${rows}
       </section>
       <footer class="form-footer">
         <button type="button" data-action="reset"><i class="fa-solid fa-rotate-left"></i> Reset defaults</button>
-        <button type="submit"><i class="fa-solid fa-save"></i> Save</button>
+        <button type="button" data-action="done"><i class="fa-solid fa-check"></i> Done</button>
       </footer>`;
     return html;
   }
@@ -149,31 +164,48 @@ class TabColorConfig extends foundry.applications.api.ApplicationV2 {
   _onRender(context, options) {
     super._onRender(context, options);
     if (!options.isFirstRender) return;
-    // Live-preview each icon in its picked color
     this.element.addEventListener("change", (event) => {
       const picker = event.target.closest("color-picker");
-      if (picker) picker.closest(".stc-row").querySelector("i").style.color = picker.value ?? "";
+      if (!picker) return;
+      picker.closest(".stc-row").querySelector("i").style.color = picker.value ?? "";
+      applyColors(this.#formColors());   // live preview on the sidebar
+      this.#dirty = true;
+      this.#saveSoon();
     });
+  }
+
+  /** Flush unsaved changes when the window is closed (also via the X). */
+  async _preClose(options) {
+    await super._preClose(options);
+    if (this.#dirty) await this.submit();
+  }
+
+  /** Saved colors merged with the current form values. */
+  #formColors() {
+    // Keep colors for tabs not currently present (e.g. a disabled module)
+    const colors = { ...game.settings.get(MODULE_ID, "colors") };
+    for (const picker of this.element.querySelectorAll(".stc-row color-picker")) {
+      if (picker.value) colors[picker.name] = picker.value;
+      else delete colors[picker.name];
+    }
+    return colors;
   }
 
   static #onApplyPreset() {
     const key = this.element.querySelector(".stc-preset-select").value;
     const pickers = Array.from(this.element.querySelectorAll(".stc-row color-picker"));
     const colors = PRESETS[key].colors(pickers.map((p) => p.name));
-    for (const picker of pickers) {
-      picker.value = colors[picker.name];
-      picker.closest(".stc-row").querySelector("i").style.color = colors[picker.name];
-    }
+    // Setting picker.value fires a change event per picker; the debounced save runs once.
+    for (const picker of pickers) picker.value = colors[picker.name];
   }
 
-  static async #onSubmit(event, form, formData) {
-    // Keep colors for tabs not currently present (e.g. a disabled module)
-    const colors = { ...game.settings.get(MODULE_ID, "colors") };
-    for (const [tab, color] of Object.entries(formData.object)) {
-      if (color) colors[tab] = color;
-      else delete colors[tab];
-    }
-    await game.settings.set(MODULE_ID, "colors", colors);
+  static async #onSubmit() {
+    this.#dirty = false;
+    await game.settings.set(MODULE_ID, "colors", this.#formColors());
+  }
+
+  static #onDone() {
+    this.close();
   }
 
   static async #onReset() {
@@ -188,7 +220,7 @@ Hooks.once("init", () => {
     config: false,
     type: Object,
     default: { ...DEFAULT_COLORS },
-    onChange: applyColors
+    onChange: () => applyColors()
   });
 
   game.settings.register(MODULE_ID, "glow", {
@@ -198,7 +230,7 @@ Hooks.once("init", () => {
     config: true,
     type: Boolean,
     default: true,
-    onChange: applyColors
+    onChange: () => applyColors()
   });
 
   game.settings.register(MODULE_ID, "startCollapsed", {
@@ -234,4 +266,4 @@ Hooks.once("ready", () => {
   if (game.settings.get(MODULE_ID, "startCollapsed")) collapseSidebar();
 });
 // Re-apply when the sidebar re-renders (tabs added by other modules, etc.)
-Hooks.on("renderSidebar", applyColors);
+Hooks.on("renderSidebar", () => applyColors());
